@@ -1,0 +1,246 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Transações - Troca moedas{% endblock %}
+
+{% block conteudo %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <h2>Transações</h2>
+        </div>
+        <div class="col-md-6 text-end">
+            <a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-outline-secondary">← Voltar</a>
+        </div>
+    </div>
+
+    {% if erro %}
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        {{ erro }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    {% if sucesso %}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        {{ sucesso }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    <!-- TABS: ATIVA / LIXEIRA -->
+    <ul class="nav nav-tabs mb-4" role="tablist">
+        <li class="nav-item" role="presentation">
+            <a class="nav-link {% if status_filtro == 'ativa' %}active{% endif %}" href="{{ url_for('transacoes.listar_transacoes', status='ativa') }}">
+                Transações Ativas
+            </a>
+        </li>
+        <li class="nav-item" role="presentation">
+            <a class="nav-link {% if status_filtro == 'descartada' %}active{% endif %}" href="{{ url_for('transacoes.listar_transacoes', status='descartada') }}">
+                Lixeira
+            </a>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        {% if status_filtro == 'ativa' %}
+        <!-- ATIVA -->
+        <div class="tab-pane fade show active" id="pane-ativa" role="tabpanel">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Adicionar Transação</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- RECEITA -->
+                        <div class="col-md-6">
+                            <h6 class="mb-3">Nova Receita</h6>
+                            <form method="POST" action="{{ url_for('transacoes.adicionar_transacao', tipo='receita') }}">
+                                <div class="mb-2">
+                                    <label class="form-label">Descrição</label>
+                                    <input type="text" class="form-control" name="descricao" required>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Valor (R$)</label>
+                                    <input type="number" class="form-control" name="valor" step="0.01" required>
+                                </div>
+                                <button type="submit" class="btn btn-success w-100">Adicionar Receita</button>
+                            </form>
+                        </div>
+
+                        <!-- DESPESA -->
+                        <div class="col-md-6">
+                            <h6 class="mb-3">Nova Despesa</h6>
+                            <form method="POST" action="{{ url_for('transacoes.adicionar_transacao', tipo='despesa') }}">
+                                <div class="mb-2">
+                                    <label class="form-label">Descrição</label>
+                                    <input type="text" class="form-control" name="descricao" required>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Valor (R$)</label>
+                                    <input type="number" class="form-control" name="valor" step="0.01" required>
+                                </div>
+                                <button type="submit" class="btn btn-danger w-100">Adicionar Despesa</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TABELA DE TRANSAÇÕES -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Histórico de Transações</h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 tabela-transacoes">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Data</th>
+                                <th>Descrição</th>
+                                <th>Categoria</th>
+                                <th>Tipo</th>
+                                <th>Valor</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if transacoes %}
+                                {% for tx in transacoes %}
+                                <tr>
+                                    <td>{{ tx.data.strftime('%d/%m/%y %H:%M') }}</td>
+                                    <td>{{ tx.descricao }}</td>
+                                    <td><span class="badge bg-secondary">{{ tx.categoria }}</span></td>
+                                    <td>
+                                        {% if tx.tipo == 'receita' %}
+                                            <span class="badge bg-success">Receita</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Despesa</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="{% if tx.tipo == 'receita' %}receita{% else %}despesa{% endif %}">
+                                            {% if tx.tipo == 'receita' %}+{% else %}-{% endif %} R$ {{ "%.2f"|format(tx.valor) }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEditar{{ tx.id }}">
+                                            Editar
+                                        </button>
+                                        <form method="POST" action="{{ url_for('transacoes.gerenciar_lixeira', id=tx.id, acao='descartar') }}" style="display: inline;">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Mover para lixeira">
+                                                Descartar
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-4">
+                                        Nenhuma transação registrada ainda
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <!-- LIXEIRA -->
+        <div class="tab-pane fade show active" id="pane-lixeira" role="tabpanel">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Transações na Lixeira</h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 tabela-transacoes">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Data</th>
+                                <th>Descrição</th>
+                                <th>Tipo</th>
+                                <th>Valor</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if transacoes %}
+                                {% for tx in transacoes %}
+                                <tr>
+                                    <td>{{ tx.data.strftime('%d/%m/%y %H:%M') }}</td>
+                                    <td>{{ tx.descricao }}</td>
+                                    <td>
+                                        {% if tx.tipo == 'receita' %}
+                                            <span class="badge bg-success">Receita</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Despesa</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>R$ {{ "%.2f"|format(tx.valor) }}</td>
+                                    <td>
+                                        <form method="POST" action="{{ url_for('transacoes.gerenciar_lixeira', id=tx.id, acao='restaurar') }}" style="display: inline;">
+                                            <button type="submit" class="btn btn-sm btn-outline-success" title="Restaurar">
+                                                Restaurar
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('transacoes.gerenciar_lixeira', id=tx.id, acao='deletar') }}" style="display: inline;" onsubmit="return confirm('deletar permanentemente?');">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Deletar permanentemente">
+                                                Deletar
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">
+                                        Lixeira vazia
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+</div>
+
+<!-- MODAIS DE EDIÇÃO DE TRANSAÇÕES -->
+{% if status_filtro == 'ativa' and transacoes %}
+    {% for tx in transacoes %}
+    <div class="modal fade" id="modalEditar{{ tx.id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Transação</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form method="POST" action="{{ url_for('transacoes.editar_transacao', id=tx.id) }}">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Descrição</label>
+                            <input type="text" class="form-control" name="descricao" value="{{ tx.descricao }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Valor (R$)</label>
+                            <input type="number" class="form-control" name="valor" step="0.01" value="{{ "%.2f"|format(tx.valor) }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Categoria</label>
+                            <input type="text" class="form-control" name="categoria" value="{{ tx.categoria or '' }}">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Salvar Mudanças</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+{% endif %}
+{% endblock %}

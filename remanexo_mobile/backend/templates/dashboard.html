@@ -1,0 +1,206 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Dashboard - Troca moedas{% endblock %}
+
+{% block conteudo %}
+<div class="container-fluid py-4">
+    {% if notificacoes and notificacoes|length > 0 %}
+    <div class="row mb-4">
+        <div class="col-12">
+            {% for notificacao in notificacoes %}
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <strong>Notificação:</strong> {{ notificacao.mensagem }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if alerta_gasto %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert-alerta alert alert-warning">
+                <strong>Alerta de Gasto Excessivo</strong>
+                <br>Você já gastou {{ "%.1f"|format(percentual_gasto) }}% de sua receita este mês. Cuidado para não ultrapassar 100%!
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- STATUS NEXO -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="float-end">
+                        <a href="{{ url_for('nexo.dashboard_nexo') }}" class="btn btn-sm btn-outline-secondary">
+                            Open Finance
+                        </a>
+                    </div>
+                    <h6 class="card-title mb-2">Status do Open Finance</h6>
+                    {% if nexo.estado == 'ativo' %}
+                        <span class="badge badge-ativo">Ativo</span>
+                    {% elif nexo.estado == 'instavel' %}
+                        <span class="badge badge-instavel">Instável</span>
+                    {% else %}
+                        <span class="badge badge-erro">Erro</span>
+                    {% endif %}
+                    <small class="text-muted ms-2">
+                        Último sync: {% if nexo.ultimo_sync %}{{ nexo.ultimo_sync.strftime('%d/%m/%y %H:%M') }}{% else %}nunca{% endif %}
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CARDS PRINCIPAIS -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="dashboard-card">
+                <h5>Saldo Total</h5>
+                <div class="valor">R$ {{ "%.2f"|format(saldo_total) }}</div>
+                <small class="text-muted">Conta: {{ conta.numero_conta }}</small>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="dashboard-card">
+                <h5>Receitas (Mês)</h5>
+                <div class="valor receita">R$ {{ "%.2f"|format(receitas_mes) }}</div>
+                <small class="text-muted">Este mês</small>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="dashboard-card">
+                <h5>Despesas (Mês)</h5>
+                <div class="valor despesa">R$ {{ "%.2f"|format(despesas_mes) }}</div>
+                <small class="text-muted">Este mês</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- GRÁFICO FINANCEIRO -->
+    <div class="row mb-4">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Resumo Financeiro (Este Mês)</h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="graficoFinanceiro" height="80"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Composição</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">Receita</span>
+                            <strong class="receita">R$ {{ "%.2f"|format(receitas_mes) }}</strong>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar bg-success" style="width: 100%;"></div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">Despesa</span>
+                            <strong class="despesa">R$ {{ "%.2f"|format(despesas_mes) }}</strong>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar bg-danger" style="width: {% if receitas_mes > 0 %}{{ [despesas_mes / receitas_mes * 100, 100]|min }}{% else %}0{% endif %}%;"></div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted">Saldo Líquido</span>
+                            <strong style="font-size: 1.25rem; color: {% if (receitas_mes - despesas_mes) >= 0 %}#10b981{% else %}#ef4444{% endif %};">
+                                R$ {{ "%.2f"|format(receitas_mes - despesas_mes) }}
+                            </strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AÇÕES RÁPIDAS -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h5 class="mb-3">Ações Rápidas</h5>
+        </div>
+        <div class="col-md-3 mb-3">
+            <a href="{{ url_for('transacoes.listar_transacoes') }}" class="btn btn-primary w-100">
+                Ver Transações
+            </a>
+        </div>
+        <div class="col-md-3 mb-3">
+            <a href="{{ url_for('metas.listar_metas') }}" class="btn btn-primary w-100">
+                Gerenciar Metas
+            </a>
+        </div>
+        <div class="col-md-3 mb-3">
+            <a href="{{ url_for('nexo.dashboard_nexo') }}" class="btn btn-primary w-100">
+                Open Finance
+            </a>
+        </div>
+        <div class="col-md-3 mb-3">
+            <a href="{{ url_for('dashboard.logout') }}" class="btn btn-outline-danger w-100">
+                Logout
+            </a>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Gráfico de Receitas vs Despesas
+    const ctx = document.getElementById('graficoFinanceiro').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['Receita', 'Despesa', 'Saldo Líquido'],
+            datasets: [
+                {
+                    label: 'Valor (R$)',
+                    data: [{{ receitas_mes }}, {{ despesas_mes }}, {{ receitas_mes - despesas_mes }}],
+                    backgroundColor: ['#10b981', '#ef4444', '#0f172a'],
+                    borderRadius: 8,
+                    borderSkipped: false,
+                    hoverBackgroundColor: ['#059669', '#dc2626', '#1e3a5f']
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            indexAxis: 'y',
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    grid: {
+                        color: '#e2e8f0'
+                    }
+                },
+                y: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

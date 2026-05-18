@@ -1,0 +1,205 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Nexo - Open Finance - Troca moedas{% endblock %}
+
+{% block conteudo %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <h2>Open Finance (Nexo)</h2>
+        </div>
+        <div class="col-md-6 text-end">
+            <a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-outline-secondary">← Voltar</a>
+        </div>
+    </div>
+
+    <!-- STATUS ATUAL -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Status do Nexo</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="mb-2">Estado Atual</h6>
+                    {% if nexo.estado == 'ativo' %}
+                        <span class="badge badge-ativo" style="font-size: 1.2em;">✓ ATIVO</span>
+                    {% elif nexo.estado == 'instavel' %}
+                        <span class="badge badge-instavel" style="font-size: 1.2em;">⚠ INSTÁVEL</span>
+                    {% else %}
+                        <span class="badge badge-erro" style="font-size: 1.2em;">✗ ERRO</span>
+                    {% endif %}
+                    <p class="text-muted mt-2">{{ descricao_estado }}</p>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="mb-2">Detalhes</h6>
+                    <p class="mb-1">
+                        <strong>Fila pendente:</strong> {{ nexo.fila_pendente }} transações
+                    </p>
+                    <p class="mb-1">
+                        <strong>Último sync:</strong>
+                        {% if nexo.ultimo_sync %}
+                            {{ nexo.ultimo_sync.strftime('%d/%m/%y %H:%M:%S') }}
+                        {% else %}
+                            Nunca sincronizou
+                        {% endif %}
+                    </p>
+                    {% if nexo.mensagem_erro %}
+                        <p class="mb-0 text-danger">
+                            <strong>Erro:</strong> {{ nexo.mensagem_erro }}
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONTROLES DE ESTADO -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Controlar Estado do Nexo</h5>
+        </div>
+        <div class="card-body">
+            <p class="mb-3 text-muted">
+                Simule diferentes estados para testar o comportamento do sistema:
+            </p>
+
+            <div class="row">
+                <!-- ESTADO ATIVO -->
+                <div class="col-md-4 mb-3">
+                    <form method="POST" action="{{ url_for('nexo.mudar_estado', novo_estado='ativo') }}">
+                        <div class="card {% if nexo.estado == 'ativo' %}border-success border-3{% else %}border-light{% endif %}">
+                            <div class="card-body">
+                                <h6 class="card-title mb-3">Mudar para Ativo</h6>
+                                <p class="card-text small text-muted mb-3">
+                                    Tudo funciona normalmente. Sincs em tempo real.
+                                </p>
+                                <button type="submit" class="btn btn-success w-100">Ativar</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- ESTADO INSTÁVEL -->
+                <div class="col-md-4 mb-3">
+                    <form method="POST" action="{{ url_for('nexo.mudar_estado', novo_estado='instavel') }}">
+                        <div class="card {% if nexo.estado == 'instavel' %}border-warning border-3{% else %}border-light{% endif %}">
+                            <div class="card-body">
+                                <h6 class="card-title mb-3">Mudar para Instável</h6>
+                                <p class="card-text small text-muted mb-3">
+                                    Simula problema de conexão. Dados em cache.
+                                </p>
+                                <button type="submit" class="btn btn-warning w-100">Pausar</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- ESTADO ERRO -->
+                <div class="col-md-4 mb-3">
+                    <form method="POST" action="{{ url_for('nexo.mudar_estado', novo_estado='erro') }}">
+                        <div class="card {% if nexo.estado == 'erro' %}border-danger border-3{% else %}border-light{% endif %}">
+                            <div class="card-body">
+                                <h6 class="card-title mb-3">Mudar para Erro</h6>
+                                <p class="card-text small text-muted mb-3">
+                                    Simula falha crítica. Sistema seguro.
+                                </p>
+                                <button type="submit" class="btn btn-danger w-100">Forçar Erro</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SINCRONIZAÇÃO -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Sincronização</h5>
+        </div>
+        <div class="card-body">
+            <p class="mb-3 text-muted">
+                Teste a sincronização. O comportamento varia conforme o estado do Nexo:
+            </p>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <form method="POST" action="{{ url_for('nexo.sincronizar') }}" id="Form-sincronizar">
+                        <button type="submit" class="btn btn-primary w-100">
+                            Sincronizar Agora
+                        </button>
+                    </form>
+                </div>
+
+                {% if nexo.estado == 'erro' %}
+                <div class="col-md-6 mb-3">
+                    <form method="POST" action="{{ url_for('nexo.recuperar_erro') }}">
+                        <button type="submit" class="btn btn-success w-100">
+                            Recuperar do Erro
+                        </button>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+
+            <div id="resultado-sync" class="mt-3" style="display: none;">
+                <div class="alert alert-info">
+                    <strong>Resultado:</strong>
+                    <span id="texto-resultado"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SINCRONIZAÇÃO COM CSV -->
+    <div class="card mb-4">
+        <div class="card-header" style="background-color: #0f172a;">
+            <h5 class="mb-0" style="color: white;">Sincronização com CSV</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('nexo.sincronizar_csv') }}" enctype="multipart/form-data">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="arquivo" class="form-label">Arquivo CSV</label>
+                        <input 
+                            type="file" 
+                            class="form-control" 
+                            id="arquivo" 
+                            name="arquivo" 
+                            accept=".csv" 
+                            required
+                        >
+                        <small class="text-muted d-block mt-2">
+                            <strong>Formato esperado:</strong><br>
+                            <code>descricao,valor,tipo,data,categoria,banco,status</code>
+                        </small>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="banco" class="form-label">Banco de Origem (Simulado)</label>
+                        <select class="form-control" id="banco" name="banco" required>
+                            <option value="">Selecione um banco...</option>
+                            <option value="itau">Itaú</option>
+                            <option value="bb">Banco do Brasil</option>
+                            <option value="caixa">Caixa</option>
+                            <option value="santander">Santander</option>
+                            <option value="interior">Banco Inter</option>
+                            <option value="nubank">Nubank</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success w-100">Sincronizar via Open Finance</button>
+            </form>
+
+            <div id="resultado-csv" class="mt-3" style="display: none;">
+                <div class="alert alert-info alert-dismissible">
+                    <strong>Status:</strong>
+                    <span id="texto-csv"></span>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Parcelamentos - Troca moedas{% endblock %}
+
+{% block conteudo %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2>Parcelamentos</h2>
+            <p class="text-muted">Visualização futura de entradas e saídas parceladas</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-outline-secondary">← Voltar</a>
+        </div>
+    </div>
+
+    <!-- MENSAGENS DE FLASH -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for categoria, mensagem in messages %}
+            <div class="alert alert-{% if categoria == 'sucesso' %}success{% else %}danger{% endif %} alert-dismissible fade show" role="alert">
+                {{ mensagem }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <!-- COLUNA ESQUERDA: FORMULÁRIO -->
+        <div class="col-lg-4 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Novo Parcelamento</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('parcelamentos.criar_parcelamento') }}">
+                        <div class="mb-3">
+                            <label class="form-label">Descrição</label>
+                            <input type="text" class="form-control" name="descricao" placeholder="Ex: TV 43\"" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Valor Total (R$)</label>
+                            <input type="number" class="form-control" name="valor_total" step="0.01" placeholder="1200.00" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Tipo</label>
+                            <select class="form-control" name="tipo" required>
+                                <option value="despesa">Despesa</option>
+                                <option value="receita">Receita</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Quantidade de Parcelas</label>
+                            <input type="number" class="form-control" name="num_parcelas" min="1" max="36" value="12" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Primeira Parcela</label>
+                            <input type="date" class="form-control" name="data_primeira" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Categoria (opcional)</label>
+                            <input type="text" class="form-control" name="categoria" placeholder="Ex: eletrônicos">
+                        </div>
+                        <button type="submit" class="btn btn-success w-100">Criar Parcelamento</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- COLUNA DIREITA: PARCELAMENTOS EXISTENTES -->
+        <div class="col-lg-8">
+            {% if transacoes_parceladas and transacoes_parceladas|length > 0 %}
+                {% for tx in transacoes_parceladas %}
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0">
+                                    {{ tx.descricao }}
+                                    <span class="badge {% if tx.tipo == 'receita' %}bg-success{% else %}bg-danger{% endif %}">
+                                        {{ tx.tipo }}
+                                    </span>
+                                </h6>
+                                <small class="text-muted">
+                                    {{ tx.num_parcelas }}x R$ {{ "%.2f"|format(tx.valor / tx.num_parcelas) }}
+                                    • Total: R$ {{ "%.2f"|format(tx.valor) }}
+                                </small>
+                            </div>
+                            <form method="POST" action="{{ url_for('parcelamentos.deletar_parcelamento', transacao_id=tx.id) }}" style="display: inline;" onsubmit="return confirm('deletar parcelamento inteiro?');">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Deletar</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="timeline">
+                            {% for parcela in tx.parcelas %}
+                            <div class="timeline-item mb-3">
+                                <div class="row align-items-center">
+                                    <div class="col-md-2">
+                                        <small class="text-muted">
+                                            {{ parcela.data_vencimento.strftime('%d/%m/%Y') }}
+                                        </small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Parcela {{ parcela.numero }}/{{ tx.num_parcelas }}</strong><br>
+                                        <small>R$ {{ "%.2f"|format(parcela.valor) }}</small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        {% if parcela.status == 'paga' %}
+                                            <span class="badge bg-success">✓ PAGA</span>
+                                            <small class="d-block text-muted">{{ parcela.data_pagamento.strftime('%d/%m/%Y') if parcela.data_pagamento else '' }}</small>
+                                        {% elif parcela.status == 'descartada' %}
+                                            <span class="badge bg-secondary">✕ DESCARTADA</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">⏳ PENDENTE</span>
+                                            {% if parcela.data_vencimento < now %}
+                                                <small class="d-block text-danger">⚠️ vencida</small>
+                                            {% endif %}
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-4 text-end">
+                                        {% if parcela.status == 'pendente' %}
+                                            <form method="POST" action="{{ url_for('parcelamentos.pagar_parcela', parcela_id=parcela.id) }}" style="display: inline;">
+                                                <button type="submit" class="btn btn-sm btn-success">
+                                                    {% if tx.tipo == 'receita' %}Receber{% else %}Pagar{% endif %}
+                                                </button>
+                                            </form>
+                                            <form method="POST" action="{{ url_for('parcelamentos.descartar_parcela', parcela_id=parcela.id) }}" style="display: inline;">
+                                                <button type="submit" class="btn btn-sm btn-outline-secondary">Descartar</button>
+                                            </form>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- RESUMO DO PARCELAMENTO -->
+                        <hr>
+                        <div class="row text-center">
+                            <div class="col-md-4">
+                                <small class="text-muted">Pagas</small><br>
+                                <strong>{{ tx.parcelas|selectattr('status', 'equalto', 'paga')|list|length }}/{{ tx.num_parcelas }}</strong>
+                            </div>
+                            <div class="col-md-4">
+                                <small class="text-muted">Pendentes</small><br>
+                                <strong>{{ tx.parcelas|selectattr('status', 'equalto', 'pendente')|list|length }}</strong>
+                            </div>
+                            <div class="col-md-4">
+                                <small class="text-muted">Descartadas</small><br>
+                                <strong>{{ tx.parcelas|selectattr('status', 'equalto', 'descartada')|list|length }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-info">
+                    📭 nenhum parcelamento criado ainda — crie um novo!
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+    .timeline-item {
+        padding-left: 1rem;
+        border-left: 2px solid #e2e8f0;
+    }
+
+    .timeline-item:hover {
+        border-left-color: #10b981;
+        background-color: #f9fafb;
+        border-radius: 0.25rem;
+        margin-left: -0.5rem;
+        padding-left: 1.5rem;
+    }
+</style>
+
+<script>
+    // passa a data de hoje pro formulário
+    document.addEventListener('DOMContentLoaded', function() {
+        const hoje = new Date().toISOString().split('T')[0];
+        document.querySelector('input[name="data_primeira"]').value = hoje;
+    });
+</script>
+{% endblock %}

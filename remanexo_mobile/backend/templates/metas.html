@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Metas - Troca moedas{% endblock %}
+
+{% block conteudo %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <h2>Metas de Economia</h2>
+        </div>
+        <div class="col-md-6 text-end">
+            <a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-outline-secondary">← Voltar</a>
+        </div>
+    </div>
+
+    <!-- CRIAR NOVA META -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Criar Nova Meta</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('metas.criar_meta') }}">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Descrição da Meta</label>
+                        <input type="text" class="form-control" name="descricao" placeholder="Ex: Viagem para Cancún" required>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Valor Alvo (R$)</label>
+                        <input type="number" class="form-control" name="valor_alvo" step="0.01" placeholder="10000.00" required>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Data Prazo (Opcional)</label>
+                        <input type="date" class="form-control" name="data_prazo">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success">Criar Meta</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- METAS ATIVAS -->
+    {% if metas_ativas and metas_ativas|length > 0 %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4 class="mb-3">Metas Ativas</h4>
+        </div>
+        {% for meta in metas_ativas %}
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h5 class="card-title mb-1">{{ meta.descricao }}</h5>
+                            <small class="text-muted">
+                                Criada em {{ meta.data_criacao.strftime('%d/%m/%y') }}
+                                {% if meta.data_prazo %}
+                                    | Prazo: {{ meta.data_prazo.strftime('%d/%m/%y') }}
+                                {% endif %}
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- BARRA DE PROGRESSO (RF05) -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Progresso</span>
+                            <strong>{{ "%.1f"|format(meta.percentual_progresso) }}%</strong>
+                        </div>
+                        <div class="barra-progresso">
+                            <div class="barra-preenchida" style="width: {{ meta.percentual_progresso }}%;">
+                                {% if meta.percentual_progresso > 5 %}
+                                    {{ "%.0f"|format(meta.percentual_progresso) }}%
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VALORES -->
+                    <div class="mb-3">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <h6 class="mb-0">Acumulado</h6>
+                                <h5 class="text-success">R$ {{ "%.2f"|format(meta.valor_acumulado) }}</h5>
+                            </div>
+                            <div class="col-6">
+                                <h6 class="mb-0">Faltando</h6>
+                                <h5 class="text-danger">R$ {{ "%.2f"|format(meta.valor_restante) }}</h5>
+                            </div>
+                        </div>
+                        <p class="text-center text-muted mb-0 mt-2">
+                            Alvo: <strong>R$ {{ "%.2f"|format(meta.valor_alvo) }}</strong>
+                        </p>
+                    </div>
+
+                    {% if meta.atingida %}
+                        <div class="alert alert-success mb-3">
+                            Meta atingida! Parabéns!
+                        </div>
+                    {% endif %}
+
+                    <!-- ATUALIZAR ACUMULADO -->
+                    <form method="POST" action="{{ url_for('metas.atualizar_meta', id=meta.id) }}" class="mb-3">
+                        <div class="input-group input-group-sm">
+                            <input
+                                type="number"
+                                step="0.01"
+                                class="form-control"
+                                name="valor_acumulado"
+                                value="{{ meta.valor_acumulado }}"
+                                placeholder="Novo valor"
+                                required
+                            >
+                            <button class="btn btn-outline-primary" type="submit">Atualizar</button>
+                        </div>
+                    </form>
+
+                    <!-- AÇÕES -->
+                    <div class="btn-group w-100" role="group">
+                        {% if meta.atingida %}
+                            <form method="POST" action="{{ url_for('metas.resetar_meta', id=meta.id) }}" style="flex: 1;">
+                                <button type="submit" class="btn btn-outline-warning w-100">Resetar</button>
+                            </form>
+                        {% endif %}
+                        <form method="POST" action="{{ url_for('metas.deletar_meta', id=meta.id) }}" style="flex: 1;">
+                            <button type="submit" class="btn btn-outline-danger w-100" onclick="return confirm('Tem certeza?')">Deletar</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-info mb-4">
+        Nenhuma meta ativa no momento. Crie uma para começar a economizar!
+    </div>
+    {% endif %}
+
+    <!-- METAS CONCLUÍDAS -->
+    {% if metas_concluidas and metas_concluidas|length > 0 %}
+    <div class="row">
+        <div class="col-12">
+            <h4 class="mb-3">Metas Concluídas</h4>
+        </div>
+        {% for meta in metas_concluidas %}
+        <div class="col-md-6 mb-3">
+            <div class="card" style="opacity: 0.8;">
+                <div class="card-body">
+                    <h5 class="card-title mb-1">{{ meta.descricao }}</h5>
+                    <small class="text-muted d-block mb-3">
+                        Concluída em {{ meta.data_criacao.strftime('%d/%m/%y') }}
+                    </small>
+
+                    <div class="barra-progresso mb-3">
+                        <div class="barra-preenchida" style="width: 100%; background-color: #28a745;">
+                            100%
+                        </div>
+                    </div>
+
+                    <p class="text-center mb-3">
+                        <strong>R$ {{ "%.2f"|format(meta.valor_alvo) }}</strong>
+                    </p>
+
+                    <form method="POST" action="{{ url_for('metas.resetar_meta', id=meta.id) }}" class="w-100">
+                        <button type="submit" class="btn btn-sm btn-outline-warning w-100">Resetar Meta</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
