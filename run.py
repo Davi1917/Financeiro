@@ -19,7 +19,7 @@ Demo:
   Senha: 123456
 """
 
-from Troca moedas_mobile.backend import app
+from Troca troca_moedas.backend import app
 
 if __name__ == '__main__':
     app.run(debug=True, host='localhost', port=5000)
