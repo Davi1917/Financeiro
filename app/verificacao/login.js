@@ -50,7 +50,7 @@ export default function Login() {
     };
 
     await AsyncStorage.setItem(
-      "@coinverter_usuario",
+      "@coinvertix_usuario",
       JSON.stringify(usuario)
     );
 
@@ -102,7 +102,7 @@ export default function Login() {
         {/* TÍTULO */}
 
         <Text style={styles.logo}>
-          COINVERTER
+          COINVERTIX
         </Text>
 
         <Text style={styles.subtitulo}>

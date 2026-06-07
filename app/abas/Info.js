@@ -4,73 +4,73 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
   Dimensions,
   RefreshControl,
 } from "react-native";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import LineChart from "react-native-chart-kit/dist/line-chart/LineChart";
+import { LineChart } from "react-native-chart-kit";
+import { converter } from "../api"; // ← centralizado
 
-const STORAGE_TRANSACOES = "@remanexo_transacoes";
-const STORAGE_METAS = "@remanexo_metas";
-const STORAGE_FAVORITAS = "@remanexo_moedas";
+const STORAGE_USUARIO   = "@coinvertix_usuario";
+const STORAGE_FAVORITAS = "@coinvertix_moedas";
 
-const API =
-  "https://economia.awesomeapi.com.br/json/last/USD-BRL,EUR-BRL,BTC-BRL,GBP-BRL,ARS-BRL";
+const PARES = [
+  { origem: "USD", destino: "BRL" },
+  { origem: "EUR", destino: "BRL" },
+  { origem: "BTC", destino: "BRL" },
+  { origem: "GBP", destino: "BRL" },
+  { origem: "ARS", destino: "BRL" },
+];
 
 const largura = Dimensions.get("window").width;
 
+const CORES = {
+  fundo:      "#F7F1E3",
+  papel:      "#FFFDF7",
+  ouro:       "#E4C441",
+  ouroEscuro: "#C8A62D",
+  tinta:      "#1F1B16",
+  tintaSuave: "#6B6255",
+  borda:      "#D8CFBE",
+  verde:      "#16A34A",
+  vermelho:   "#DC2626",
+};
+
 export default function Info() {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  const [transacoes, setTransacoes] = useState([]);
-  const [metas, setMetas] = useState([]);
-
-  const [cotacoes, setCotacoes] = useState({});
-  const [favoritas, setFavoritas] = useState([]);
+  const [usuario, setUsuario]       = useState(null);
+  const [cotacoes, setCotacoes]     = useState([]);  // array normalizado
+  const [favoritas, setFavoritas]   = useState([]);
 
   async function carregarTudo() {
     try {
-      const tx =
-        await AsyncStorage.getItem(
-          STORAGE_TRANSACOES
-        );
+      const usuarioStr = await AsyncStorage.getItem(STORAGE_USUARIO);
+      const favStr     = await AsyncStorage.getItem(STORAGE_FAVORITAS);
 
-      const metasStorage =
-        await AsyncStorage.getItem(
-          STORAGE_METAS
-        );
+      if (usuarioStr) setUsuario(JSON.parse(usuarioStr));
+      setFavoritas(favStr ? JSON.parse(favStr) : ["USD", "EUR", "BTC"]);
 
-      const fav =
-        await AsyncStorage.getItem(
-          STORAGE_FAVORITAS
-        );
-
-      setTransacoes(
-        tx ? JSON.parse(tx) : []
+      // Busca todos os pares em paralelo via api.js (já normalizado)
+      const resultados = await Promise.all(
+        PARES.map(({ origem, destino }) =>
+          converter(origem, destino).catch(() => null)
+        )
       );
 
-      setMetas(
-        metasStorage
-          ? JSON.parse(metasStorage)
-          : []
-      );
+      const lista = resultados
+        .map((res, i) => {
+          if (!res) return null;
+          const chave = `${PARES[i].origem}${PARES[i].destino}`;
+          return res[chave] ? { ...res[chave], par: PARES[i] } : null;
+        })
+        .filter(Boolean);
 
-      setFavoritas(
-        fav ? JSON.parse(fav) : ["USD"]
-      );
-
-      const resposta = await fetch(API);
-
-      const dados =
-        await resposta.json();
-
-      setCotacoes(dados);
+      setCotacoes(lista);
     } catch (e) {
-      console.log(e);
+      console.log("Info.carregarTudo:", e);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -81,535 +81,333 @@ export default function Info() {
     carregarTudo();
   }, []);
 
-  const receitas = transacoes
-    .filter((t) => t.tipo === "receita")
-    .reduce(
-      (acc, item) =>
-        acc + Number(item.valor),
-      0
-    );
-
-  const despesas = transacoes
-    .filter((t) => t.tipo === "despesa")
-    .reduce(
-      (acc, item) =>
-        acc + Number(item.valor),
-      0
-    );
-
-  const saldo =
-    receitas - despesas;
-
-  const ultimas = [...transacoes]
-    .sort((a, b) => b.id - a.id)
-    .slice(0, 5);
-
-  const graficoDados =
-    transacoes.length > 0
-      ? transacoes
-          .slice(-7)
-          .map((t) =>
-            Number(t.valor)
-          )
-      : [0];
+  // Dados do gráfico — já são Number() graças ao api.js
+  const graficoBids   = cotacoes.length >= 2 ? cotacoes.map((m) => m.bid) : [0, 1];
+  const graficoLabels = cotacoes.length >= 2 ? cotacoes.map((m) => m.par.origem) : ["", ""];
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator
-          size="large"
-          color="#4CAF50"
-        />
+        <ActivityIndicator size="large" color={CORES.ouro} />
       </View>
     );
   }
 
   return (
     <ScrollView
+      style={styles.container}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true);
-            carregarTudo();
-          }}
+          onRefresh={() => { setRefreshing(true); carregarTudo(); }}
+          tintColor={CORES.ouro}
         />
       }
-      style={styles.container}
     >
       {/* HERO */}
-
       <View style={styles.hero}>
-        <Text style={styles.heroLabel}>
-          Saldo Atual
-        </Text>
-
-        <Text style={styles.heroSaldo}>
-          R$ {saldo.toFixed(2)}
-        </Text>
-
-        <Text style={styles.heroSub}>
-          Controle financeiro inteligente
-        </Text>
+        <View style={styles.simbolo}>
+          <Text style={styles.simboloIcone}>☆</Text>
+        </View>
+        <Text style={styles.heroTitulo}>COINVERTIX</Text>
+        <Text style={styles.heroSub}>Mercado de Câmbio</Text>
+        {usuario?.nome ? (
+          <Text style={styles.heroUsuario}>Olá, {usuario.nome}</Text>
+        ) : null}
       </View>
 
-      {/* RESUMO */}
-
+      {/* ESTATÍSTICAS DO PERFIL */}
       <View style={styles.grid}>
         <View style={styles.cardMini}>
-          <Text style={styles.cardIcon}>
-            📈
-          </Text>
-
-          <Text style={styles.valorVerde}>
-            R$ {receitas.toFixed(2)}
-          </Text>
-
-          <Text style={styles.label}>
-            Receitas
-          </Text>
+          <Text style={styles.cardIcone}>🔄</Text>
+          <Text style={styles.cardNumero}>{usuario?.totalConversoes || 0}</Text>
+          <Text style={styles.cardLabel}>Conversões</Text>
         </View>
 
         <View style={styles.cardMini}>
-          <Text style={styles.cardIcon}>
-            📉
-          </Text>
-
-          <Text style={styles.valorVermelho}>
-            R$ {despesas.toFixed(2)}
-          </Text>
-
-          <Text style={styles.label}>
-            Despesas
-          </Text>
+          <Text style={styles.cardIcone}>💱</Text>
+          <Text style={styles.cardNumero}>{favoritas.length}</Text>
+          <Text style={styles.cardLabel}>Favoritas</Text>
         </View>
 
         <View style={styles.cardMini}>
-          <Text style={styles.cardIcon}>
-            🎯
+          <Text style={styles.cardIcone}>📅</Text>
+          <Text style={[styles.cardNumero, { fontSize: 13 }]}>
+            {usuario?.dataCriacao
+              ? new Date(usuario.dataCriacao).toLocaleDateString("pt-BR")
+              : "—"}
           </Text>
-
-          <Text style={styles.valor}>
-            {metas.length}
-          </Text>
-
-          <Text style={styles.label}>
-            Metas
-          </Text>
+          <Text style={styles.cardLabel}>Membro desde</Text>
         </View>
 
         <View style={styles.cardMini}>
-          <Text style={styles.cardIcon}>
-            💰
-          </Text>
-
-          <Text style={styles.valor}>
-            {transacoes.length}
-          </Text>
-
-          <Text style={styles.label}>
-            Movimentos
-          </Text>
+          <Text style={styles.cardIcone}>🌍</Text>
+          <Text style={styles.cardNumero}>{cotacoes.length}</Text>
+          <Text style={styles.cardLabel}>Pares ao vivo</Text>
         </View>
       </View>
 
       {/* GRÁFICO */}
-
-      <Text style={styles.section}>
-        Evolução Financeira
-      </Text>
+      <Text style={styles.secaoTitulo}>✦ Cotações ao Vivo</Text>
 
       <View style={styles.chartCard}>
         <LineChart
           data={{
-            labels: graficoDados.map(
-              (_, i) => `${i + 1}`
-            ),
-            datasets: [
-              {
-                data: graficoDados,
-              },
-            ],
+            labels: graficoLabels,
+            datasets: [{ data: graficoBids }],
           }}
-          width={largura - 50}
-          height={220}
+          width={largura - 40}
+          height={200}
           bezier
           chartConfig={{
-            backgroundGradientFrom:
-              "#ffffff",
-            backgroundGradientTo:
-              "#ffffff",
-            decimalPlaces: 0,
-            color: (opacity) =>
-              `rgba(76,175,80,${opacity})`,
-            labelColor: (opacity) =>
-              `rgba(0,0,0,${opacity})`,
+            backgroundGradientFrom: CORES.papel,
+            backgroundGradientTo:   CORES.papel,
+            decimalPlaces:          2,
+            color:      (opacity) => `rgba(200, 166, 45, ${opacity})`,
+            labelColor: (opacity) => `rgba(107, 98, 85, ${opacity})`,
+            propsForDots: {
+              r: "5",
+              strokeWidth: "2",
+              stroke: CORES.ouroEscuro,
+            },
           }}
-          style={{
-            borderRadius: 20,
-          }}
+          style={{ borderRadius: 20 }}
         />
       </View>
 
       {/* MERCADO */}
-
-      <Text style={styles.section}>
-        Mercado de Câmbio
-      </Text>
+      <Text style={styles.secaoTitulo}>✦ Mercado de Câmbio</Text>
 
       <View style={styles.marketCard}>
-        {Object.values(cotacoes).map(
-          (moeda) => (
-            <View
-              key={moeda.code}
-              style={
-                styles.moedaLinha
-              }
-            >
-              <View>
-                <Text
-                  style={
-                    styles.moedaNome
-                  }
-                >
-                  {moeda.code}
-                </Text>
-
-                <Text
-                  style={
-                    styles.moedaValor
-                  }
-                >
-                  R${" "}
-                  {Number(
-                    moeda.bid
-                  ).toFixed(2)}
-                </Text>
-              </View>
-
-              <Text
-                style={{
-                  color:
-                    Number(
-                      moeda.pctChange
-                    ) >= 0
-                      ? "#16A34A"
-                      : "#DC2626",
-                  fontWeight:
-                    "700",
-                }}
-              >
-                {Number(
-                  moeda.pctChange
-                ).toFixed(2)}
-                %
+        {cotacoes.map((moeda, index) => (
+          <View
+            key={`${moeda.code}-${index}`}  // ← key única, sem duplicatas
+            style={[
+              styles.moedaLinha,
+              index === cotacoes.length - 1 && { borderBottomWidth: 0 },
+            ]}
+          >
+            <View>
+              <Text style={styles.moedaNome}>{moeda.par.origem}</Text>
+              <Text style={styles.moedaValor}>
+                R$ {moeda.bid.toFixed(2)}
               </Text>
             </View>
-          )
-        )}
+
+            <View style={styles.variacaoContainer}>
+              <Text
+                style={[
+                  styles.variacao,
+                  { color: moeda.pctChange >= 0 ? CORES.verde : CORES.vermelho },
+                ]}
+              >
+                {moeda.pctChange >= 0 ? "▲" : "▼"}{" "}
+                {Math.abs(moeda.pctChange).toFixed(2)}%
+              </Text>
+              <Text style={styles.moedaAsk}>
+                Venda: R$ {moeda.ask.toFixed(2)}
+              </Text>
+            </View>
+          </View>
+        ))}
       </View>
 
-      {/* FAVORITAS */}
-
-      <Text style={styles.section}>
-        Suas Moedas
-      </Text>
+      {/* MOEDAS FAVORITAS */}
+      <Text style={styles.secaoTitulo}>✦ Suas Moedas</Text>
 
       <ScrollView
         horizontal
-        showsHorizontalScrollIndicator={
-          false
-        }
+        showsHorizontalScrollIndicator={false}
+        style={{ marginBottom: 24 }}
       >
         {favoritas.map((codigo) => {
-          const moeda =
-            cotacoes[
-              `${codigo}BRL`
-            ];
-
+          const moeda = cotacoes.find((m) => m.par.origem === codigo);
           if (!moeda) return null;
-
           return (
-            <View
-              key={codigo}
-              style={
-                styles.favoriteCard
-              }
-            >
+            <View key={codigo} style={styles.favCard}>
+              <Text style={styles.favCodigo}>{codigo}</Text>
+              <Text style={styles.favValor}>R$ {moeda.bid.toFixed(2)}</Text>
               <Text
-                style={
-                  styles.favoriteCode
-                }
+                style={[
+                  styles.favVariacao,
+                  { color: moeda.pctChange >= 0 ? CORES.verde : CORES.vermelho },
+                ]}
               >
-                {codigo}
-              </Text>
-
-              <Text
-                style={
-                  styles.favoriteValue
-                }
-              >
-                R${" "}
-                {Number(
-                  moeda.bid
-                ).toFixed(2)}
+                {moeda.pctChange >= 0 ? "+" : ""}
+                {moeda.pctChange.toFixed(2)}%
               </Text>
             </View>
           );
         })}
       </ScrollView>
 
-      {/* METAS */}
-
-      <Text style={styles.section}>
-        Metas Financeiras
-      </Text>
-
-      {metas.map((meta) => (
-        <View
-          key={meta.id}
-          style={styles.metaCard}
-        >
-          <Text style={styles.metaNome}>
-            {meta.descricao}
-          </Text>
-
-          <Text style={styles.metaValor}>
-            R$ {meta.valor_acumulado} /
-            R$ {meta.valor_alvo}
-          </Text>
-
-          <View
-            style={
-              styles.progressBackground
-            }
-          >
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${Math.min(
-                    meta.progresso,
-                    100
-                  )}%`,
-                },
-              ]}
-            />
+      {/* ÚLTIMA CONVERSÃO */}
+      {usuario?.ultimaConversao && (
+        <>
+          <Text style={styles.secaoTitulo}>✦ Última Conversão</Text>
+          <View style={styles.ultimaCard}>
+            <Text style={styles.ultimaDe}>
+              {usuario.ultimaConversao.valor} {usuario.ultimaConversao.origem}
+            </Text>
+            <Text style={styles.ultimaSeta}>↓</Text>
+            <Text style={styles.ultimaPara}>
+              {Number(usuario.ultimaConversao.resultado).toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+              })}{" "}
+              {usuario.ultimaConversao.destino}
+            </Text>
           </View>
-        </View>
-      ))}
+        </>
+      )}
 
-      {/* HISTÓRICO */}
+      {/* RODAPÉ */}
+      <View style={styles.rodape}>
+        <View style={styles.divisor} />
+        <Text style={styles.rodapeTexto}>
+          Assim como o{" "}
+          <Text style={styles.destaque}>Ás de Ouros</Text>
+          {" "}revela riquezas ocultas,{"\n"}cada conversão abre novos caminhos.
+        </Text>
+      </View>
 
-      <Text style={styles.section}>
-        Últimas Movimentações
-      </Text>
-
-      {ultimas.map((item) => (
-        <View
-          key={item.id}
-          style={styles.historyCard}
-        >
-          <Text>
-            {item.descricao}
-          </Text>
-
-          <Text
-            style={{
-              color:
-                item.tipo ===
-                "receita"
-                  ? "#16A34A"
-                  : "#DC2626",
-              fontWeight: "700",
-            }}
-          >
-            R$ {item.valor}
-          </Text>
-        </View>
-      ))}
-
-      <View
-        style={{ height: 40 }}
-      />
+      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F4FFF8",
-  },
+  container: { flex: 1, backgroundColor: CORES.fundo },
 
   center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: CORES.fundo,
   },
 
   hero: {
-    backgroundColor: "#57C785",
+    backgroundColor: CORES.tinta,
     paddingTop: 70,
-    paddingBottom: 30,
+    paddingBottom: 36,
     alignItems: "center",
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    marginBottom: 24,
   },
-
-  heroLabel: {
-    color: "#EFFFF4",
+  simbolo: {
+    width: 64, height: 64,
+    borderRadius: 32,
+    backgroundColor: CORES.ouro,
+    borderWidth: 2.5,
+    borderColor: CORES.ouroEscuro,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 14,
   },
-
-  heroSaldo: {
-    color: "#fff",
-    fontSize: 38,
-    fontWeight: "bold",
-    marginTop: 6,
-  },
-
-  heroSub: {
-    color: "#DDF9E7",
-    marginTop: 4,
-  },
+  simboloIcone:  { fontSize: 30, color: CORES.tinta },
+  heroTitulo:    { color: CORES.ouro, fontSize: 26, fontWeight: "700", letterSpacing: 5 },
+  heroSub:       { color: CORES.borda, fontSize: 13, fontStyle: "italic", marginTop: 4 },
+  heroUsuario:   { color: "#FFFFFF88", fontSize: 12, marginTop: 6 },
 
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    padding: 16,
-    justifyContent:
-      "space-between",
+    paddingHorizontal: 16,
+    gap: 10,
+    marginBottom: 24,
   },
-
   cardMini: {
-    width: "48%",
-    backgroundColor: "#fff",
+    width: (largura - 52) / 2,
+    backgroundColor: CORES.papel,
+    borderWidth: 1,
+    borderColor: CORES.borda,
     borderRadius: 20,
-    padding: 18,
-    marginBottom: 12,
+    padding: 16,
   },
+  cardIcone:  { fontSize: 22 },
+  cardNumero: { fontSize: 24, fontWeight: "800", color: CORES.tinta, marginTop: 8 },
+  cardLabel:  { color: CORES.tintaSuave, fontSize: 12, marginTop: 4 },
 
-  cardIcon: {
-    fontSize: 24,
-  },
-
-  valor: {
-    fontSize: 22,
+  secaoTitulo: {
+    fontSize: 14,
     fontWeight: "700",
-    marginTop: 10,
-  },
-
-  valorVerde: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#16A34A",
-    marginTop: 10,
-  },
-
-  valorVermelho: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#DC2626",
-    marginTop: 10,
-  },
-
-  label: {
-    color: "#777",
-    marginTop: 4,
-  },
-
-  section: {
-    fontSize: 20,
-    fontWeight: "700",
-    marginHorizontal: 16,
-    marginBottom: 12,
-    marginTop: 12,
+    color: CORES.tintaSuave,
+    letterSpacing: 2,
+    marginHorizontal: 20,
+    marginBottom: 14,
   },
 
   chartCard: {
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 28,
+    marginHorizontal: 20,
+    backgroundColor: CORES.papel,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CORES.borda,
+    paddingVertical: 16,
+    overflow: "hidden",
   },
 
   marketCard: {
-    backgroundColor: "#fff",
-    marginHorizontal: 16,
+    backgroundColor: CORES.papel,
+    marginHorizontal: 20,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CORES.borda,
     padding: 16,
+    marginBottom: 28,
   },
-
   moedaLinha: {
     flexDirection: "row",
-    justifyContent:
-      "space-between",
-    marginBottom: 16,
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: CORES.borda,
   },
+  moedaNome:  { fontWeight: "800", fontSize: 16, color: CORES.tinta, letterSpacing: 1 },
+  moedaValor: { color: CORES.tintaSuave, fontSize: 13, marginTop: 2 },
+  variacaoContainer: { alignItems: "flex-end" },
+  variacao:   { fontWeight: "700", fontSize: 14 },
+  moedaAsk:   { fontSize: 11, color: CORES.tintaSuave, marginTop: 2 },
 
-  moedaNome: {
-    fontWeight: "700",
-  },
-
-  moedaValor: {
-    color: "#666",
-  },
-
-  favoriteCard: {
-    backgroundColor: "#fff",
-    marginLeft: 16,
-    padding: 20,
+  favCard: {
+    backgroundColor: CORES.papel,
+    marginLeft: 20,
+    padding: 18,
     borderRadius: 20,
-    minWidth: 120,
+    minWidth: 110,
+    borderWidth: 1,
+    borderColor: CORES.borda,
+    alignItems: "center",
   },
+  favCodigo:   { fontSize: 16, fontWeight: "800", color: CORES.tinta, letterSpacing: 1 },
+  favValor:    { fontSize: 14, fontWeight: "600", color: CORES.ouroEscuro, marginTop: 6 },
+  favVariacao: { fontSize: 12, fontWeight: "700", marginTop: 4 },
 
-  favoriteCode: {
-    fontSize: 18,
-    fontWeight: "700",
-  },
-
-  favoriteValue: {
-    marginTop: 8,
-    color: "#16A34A",
-  },
-
-  metaCard: {
-    backgroundColor: "#fff",
-    marginHorizontal: 16,
-    marginBottom: 12,
+  ultimaCard: {
+    backgroundColor: CORES.papel,
+    marginHorizontal: 20,
     borderRadius: 20,
-    padding: 16,
+    borderWidth: 1.5,
+    borderColor: CORES.ouro,
+    padding: 22,
+    alignItems: "center",
+    marginBottom: 28,
   },
+  ultimaDe:   { fontSize: 16, fontWeight: "600", color: CORES.tintaSuave },
+  ultimaSeta: { fontSize: 22, color: CORES.ouroEscuro, marginVertical: 6 },
+  ultimaPara: { fontSize: 26, fontWeight: "800", color: CORES.tinta },
 
-  metaNome: {
-    fontWeight: "700",
-    fontSize: 16,
+  rodape: { alignItems: "center", gap: 16, marginHorizontal: 20 },
+  divisor: { width: "70%", height: 1.5, backgroundColor: CORES.ouro, opacity: 0.5 },
+  rodapeTexto: {
+    textAlign: "center",
+    color: CORES.tintaSuave,
+    lineHeight: 22,
+    fontStyle: "italic",
+    fontSize: 13,
   },
-
-  metaValor: {
-    color: "#666",
-    marginTop: 4,
-  },
-
-  progressBackground: {
-    height: 10,
-    backgroundColor: "#eee",
-    borderRadius: 10,
-    marginTop: 12,
-  },
-
-  progressFill: {
-    height: 10,
-    backgroundColor: "#57C785",
-    borderRadius: 10,
-  },
-
-  historyCard: {
-    backgroundColor: "#fff",
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 20,
-    padding: 16,
-    flexDirection: "row",
-    justifyContent:
-      "space-between",
-  },
+  destaque: { color: CORES.ouroEscuro, fontWeight: "700" },
 });
