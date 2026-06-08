@@ -107,8 +107,9 @@ export default function Home() {
     } catch (e) {
       console.log(e);
     } finally {
-      setLoadingCotacoes(false);
-    }
+  console.log('✅ FINALLY - setLoadingCotacoes(false)');
+  setLoadingCotacoes(false);
+}
   }
 
   async function executarConversao() {
